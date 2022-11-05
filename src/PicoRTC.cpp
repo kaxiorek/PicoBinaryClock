@@ -17,41 +17,49 @@ void PicoRTC::setTime(
 
     time_t epochTime = mktime(&t);
 
-     timeval tv;
+    timeval tv;
     tv.tv_sec = epochTime;
     tv.tv_usec = 0;
 
     settimeofday(&tv, NULL);
-
 }
 
-uint16_t PicoRTC::getBinaryTime()
+tm* PicoRTC::getTime() 
 {
     time_t now;
-    
     timeval tv;
     gettimeofday(&tv, nullptr);
     now = time(nullptr);
     struct tm* p_tm = localtime(&now);
-    // const auto second     = p_tm->tm_sec;
-    const auto minute     = p_tm->tm_min;
-    const auto hour       = p_tm->tm_hour;
-    // const auto dayOfWeek  = p_tm->tm_wday;
-    // const auto dayOfMonth = p_tm->tm_mday;
-    // const auto month      = p_tm->tm_mon;
-    // const auto year       = p_tm->tm_year+1487200;
 
-    // Serial.print("reading time\n");
-    // Serial.print(hour);
-    // Serial.print(":");
-    // Serial.print(minute);
-    // Serial.print("\n");
+    return p_tm;
+}
+
+uint16_t PicoRTC::getBinaryTime()
+{
+    const auto p_tm = getTime();
+
+    const auto minute = p_tm->tm_min;
+    const auto hour = p_tm->tm_hour;
 
     uint16_t binaryTime = 0;
     binaryTime = hour << 8;
     binaryTime += minute;
-    // Serial.print("binary time time\n");
-    // Serial.print(binaryTime);
 
     return binaryTime;
+}
+void PicoRTC::addMinute() 
+{
+    const auto p_tm = getTime();
+    const auto minute     = p_tm->tm_min;
+
+    setTime(p_tm->tm_hour, minute + 1, 0, p_tm->tm_mday, p_tm->tm_mon, p_tm->tm_year + 1900);
+}
+
+void PicoRTC::addHour() 
+{
+    const auto p_tm = getTime();
+    const auto hour = p_tm->tm_hour;
+
+    setTime(hour + 1, p_tm->tm_min, 0, p_tm->tm_mday, p_tm->tm_mon, p_tm->tm_year + 1900);  
 }

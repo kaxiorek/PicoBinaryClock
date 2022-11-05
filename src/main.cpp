@@ -3,6 +3,7 @@
 #include "IC_74HC595.hpp"
 #include "PicoRTC.hpp"
 #include "Button.hpp"
+#include "State.hpp"
 
 constexpr uint8_t latchPin = 15;
 constexpr uint8_t clockPin = 14;
@@ -18,6 +19,7 @@ IC::Serial74HC595 shiftRegister(latchPin, clockPin, dataPin, oePin);
 PicoRTC rtc;
 
 uint8_t currentBrightness = 0;
+State state = State::Normal;
 
 Button *ntpButton;
 Button *changeValButton;
@@ -26,6 +28,8 @@ Button *changeBrightnessButton;
 
 void changeBrightness();
 void readButtons();
+void changeMode();
+void changeTime();
 
 void setPinModes()
 {
@@ -57,19 +61,40 @@ void setup()
         changeBrightness();
     });
     modeButton = new Button(modePin, []() {
-        Serial.println("changing mode is not yet implemented");
+        changeMode();
     });
     changeValButton = new Button(changeValPin, []() {
-        Serial.println("change value is not yet implemented");
+        changeTime();
     });
-    
 }
+
+unsigned long timeNow = 0;
+unsigned long blinkingTime = 500;
+bool shouldBlink = false;
 
 void loop() {
     shiftRegister.setBrightness(currentBrightness);
-    shiftRegister.writeValue(rtc.getBinaryTime());
+    if (state == State::Normal)
+        shiftRegister.writeValue(rtc.getBinaryTime());
+    else if (state == State::ManualModeMinutes || state == State::ManualModeHours)
+    {
+        if ((millis() - timeNow) > blinkingTime)
+        {
+            shouldBlink = !shouldBlink;
+            timeNow = millis();        
+        }
+        auto binaryTime = rtc.getBinaryTime();
+        
+        if (shouldBlink)
+        {
+            binaryTime &= state == State::ManualModeMinutes ? 0xFF00 : 0xFF;
+            shiftRegister.writeValue(binaryTime);
+        }    
+        else
+            shiftRegister.writeValue(binaryTime); 
+    }
+    
     readButtons();
-
     delay(10);
 }
 
@@ -89,4 +114,31 @@ void changeBrightness()
     currentBrightness += 10;
     if (currentBrightness > maxVal) currentBrightness = minVal;
     shiftRegister.setBrightness(currentBrightness);
+}
+
+void changeMode()
+{
+    if (state == State::Normal)
+    {
+        Serial.println("Change mode to ManualModeMinutes");
+        state = State::ManualModeMinutes;
+    }
+    else if (state == State::ManualModeMinutes)
+    {
+        Serial.println("Change mode to ManualModeHours");
+        state = State::ManualModeHours;
+    }
+    else if (state == State::ManualModeHours)
+    {
+        Serial.println("Change mode to Normal");
+        state = State::Normal;
+    }
+}
+
+void changeTime()
+{
+    if (state == State::ManualModeMinutes) 
+        rtc.addMinute();
+    else if (state == State::ManualModeHours)
+        rtc.addHour();
 }
